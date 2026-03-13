@@ -77,6 +77,7 @@ function result = apply_offset(serial_date, y_off, m_off, d_off)
     final_year   = y + y_off + extra_years; %Total year shift
 
     % Clamp day if it exceeds the month (e.g. day 31 in a 30-day month)
+
     max_day   = eomday(final_year, final_month); % We need to check the last day of the final month
     final_day = min(d, max_day); % e.g. : The day will be 29th of february if d = 31
 
@@ -87,6 +88,7 @@ end
 
 
 function adj = roll_to_busday(serial_date, convention)
+
 % Rolls a date to the nearest business day.
 %   'following'          -> always forward
 %   'modified_following' -> forward, unless that changes the month, then backward
