@@ -72,6 +72,7 @@ datesCDS = datenum(ref_dt + calyears(1:7)');
 % JT (flag = 3)
 [datesCDS, survProbs_JT, intensities_JT]  = bootstrapCDS(dates, discounts, datesCDS, spreadsCDS, 3, recovery);
 
+plot_intensities(datesCDS, intensities_approx, intensities_exact, intensities_JT, 'intensities.pdf')
 %% Exercise 5
 
 lambda1 = 4e-4;   % 4 bps
