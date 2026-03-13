@@ -93,20 +93,21 @@ function [datesCDS, survProbs, intensities] = bootstrapCDS(datesDF, discounts, d
             intensities(i) = -log(survProbs(i) / P_i_minus_1) / deltas(i);
         end
         
-    elseif flag == 2
+    elseif flag == 2 % Exact: we also consider the accrual term
+
         for i = 1:N
             S_N = spreadsCDS(i); % We fix the CDS rate
             
             sum_fee_passed = 0; %We store the fee leg: sum(delta(ti-1,ti)*B(to,ti)*survivalprob(ti)
             sum_cont_passed = 0; % We store the contingent leg: sum(B(ti)*P(ti-1<default<ti)
             
-            sum_accrual_passed = 0;
+            sum_accrual_passed = 0; % We add the accrual term: sum(B(ti)*(P(ti-1<default<ti))delta(ti-1,ti)/2)
             
             % We compute the sum up to the last iteration (everything is
             % known up to ti-1):
 
             for j = 1:(i-1)
-                % P_j e P_{j-1}
+                % P_j and P_{j-1}
                 P_j = survProbs(j);
                 
                 if j == 1
@@ -133,7 +134,7 @@ function [datesCDS, survProbs, intensities] = bootstrapCDS(datesDF, discounts, d
 
             Num = (1 - recovery) * sum_cont_passed ...
                   - S_N * (sum_fee_passed + sum_accrual_passed)...
-                  - S_N * deltas(i)*B(i)*P_i_minus_1/2+...
+                  - S_N * deltas(i)*B(i)*P_i_minus_1/2+... %here we add the accrual term
                   + (1 - recovery) * B(i) * P_i_minus_1;
                   
             Den = B(i) * (S_N * deltas(i)/2 + (1 - recovery));
