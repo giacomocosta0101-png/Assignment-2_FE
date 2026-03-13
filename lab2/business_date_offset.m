@@ -1,72 +1,133 @@
 function adjusted_date = business_date_offset(base_date, varargin)
-    % FIX: accetta sia datenum (double) che datetime
+
+% BUSINESS_DATE_OFFSET Compute a business-adjusted date from a base date plus calendar offsets.
+%
+%   adjusted_date = BUSINESS_DATE_OFFSET(base_date)
+%   adjusted_date = BUSINESS_DATE_OFFSET(base_date, Name, Value, ...)
+%
+%   Applies year, month, and day offsets to a reference date, then rolls the
+%   result to the nearest valid business day according to the chosen
+%   convention. Weekend and holiday detection relies on MATLAB's ISBUSDAY
+%   (Financial Toolbox).
+%
+%   Input: calendar date (MATLAB serial date number or datetime scalar)
+%
+%   Name-Value Parameters (Optional):
+%       'year_offset'   - Integer number of years to add  (default: 0).
+%       'month_offset'  - Integer number of months to add (default: 0).
+%       'day_offset'    - Integer number of days to add   (default: 0).
+%       'convention'    - Business-day roll convention (default: 'following'):
+%               'following'           - roll forward to the next business day.
+%               'modified_following'  - roll forward, but if that crosses the
+%                                       month boundary, roll backward instead.
+%
+%   Output:
+%       adjusted_date: Adjusted business date returned as a serial date number
+
+%% 1. Read inputs
+    % We convert the datetime into date num:
+
     if isdatetime(base_date)
         base_date = datenum(base_date);
     end
-    % BUSINESS_DATE_OFFSET Return the closest following business date after applying offset
-%
-% Parameters:
-%   base_date (double): Reference date as MATLAB serial date number
-%   year_offset (int, optional): Number of years to add (default: 0)
-%   month_offset (int, optional): Number of months to add (default: 0)
-%   day_offset (int, optional): Number of days to add (default: 0)
-%   convention (string, optional): Business day convention ('following' or 'modified_following', default: 'following')
-%
-% Returns:
-%   adjusted_date (double): Closest following business date as serial number
-%
-% Example:
-%   adjusted = business_date_offset(datenum('15-Mar-2024'), 'year_offset', 1, 'month_offset', 2);
-%   adjusted = business_date_offset(datenum('31-May-2024'), 'year_offset', 1, 'convention', 'modified_following');
-% Parse optional arguments
+    
+    % We put at zero the optional parameters which have not been present at
+    % input:
+
     p = inputParser;
-    addParameter(p, 'year_offset', 0, @isnumeric);
-    addParameter(p, 'month_offset', 0, @isnumeric);
-    addParameter(p, 'day_offset', 0, @isnumeric);
-    addParameter(p, 'convention', 'following', @ischar);
-    parse(p, varargin{:});
-    year_offset = p.Results.year_offset;
-    month_offset = p.Results.month_offset;
-    day_offset = p.Results.day_offset;
+    addParameter(p, 'year_offset',  0,           @isnumeric); %We expect a number, default = 0
+    addParameter(p, 'month_offset', 0,           @isnumeric); % We expect a number, default = 0
+    addParameter(p, 'day_offset',   0,           @isnumeric); % We expect a number, default = 0
+    addParameter(p, 'convention',   'following', @ischar); % We expect a string, default = 'following'
+    parse(p, varargin{:}); % We combine the optional parameters into p:
+    
+    year_off   = p.Results.year_offset;
+    month_off  = p.Results.month_offset;
+    day_off    = p.Results.day_offset;
     convention = lower(p.Results.convention);
-% Convert serial date to datetime for easier manipulation
-    base_dt = datetime(base_date, 'ConvertFrom', 'datenum');
-% Extract year, month, day
-    [y, m, d] = ymd(base_dt);
-% Adjust year and month
-    total_months = m + month_offset;
-    year_add = floor((total_months - 1) / 12);
-    new_month = mod(total_months - 1, 12) + 1;
-    new_year = y + year_offset + year_add;
-% Handle invalid day (e.g., Feb 31 -> Feb 28/29)
-    last_day = eomday(new_year, new_month);
-    new_day = min(d, last_day);
-% Create adjusted date
-    adjusted_dt = datetime(new_year, new_month, new_day) + days(day_offset);
-% Convert back to serial date number
-    adjusted_date = datenum(adjusted_dt);
-% Store the target month for modified following check
-    target_month = month(adjusted_dt);
-    target_year = year(adjusted_dt);
-% Adjust to business day based on convention
-if strcmp(convention, 'modified_following')
-% Modified Following: move forward, but if it crosses month boundary, move backward
-while ~isbusday(adjusted_date)
-            adjusted_date = adjusted_date + 1;
+
+    %% 2. Apply year/month/day offset
+
+    % We compute the shifts with the function apply_offset (below):
+
+    raw_date = apply_offset(base_date, year_off, month_off, day_off);
+
+    %% 3. Roll to business day
+    
+    % We apply the convention (following or modifiend following) 
+    % in the function roll_to_busday (below):
+
+    adjusted_date = roll_to_busday(raw_date, convention);
+
 end
-% Check if we've moved to a different month
-        adjusted_dt_check = datetime(adjusted_date, 'ConvertFrom', 'datenum');
-if month(adjusted_dt_check) ~= target_month || year(adjusted_dt_check) ~= target_year
-% We crossed into next month, so go backward instead
-            adjusted_date = datenum(datetime(target_year, target_month, new_day));
-while ~isbusday(adjusted_date)
-                adjusted_date = adjusted_date - 1;
+
+
+function result = apply_offset(serial_date, y_off, m_off, d_off)
+
+% Takes a serial date, adds year/month/day offsets, returns serial date.
+% Handles impossible dates (e.g. 31-Feb becomes 28-Feb).
+
+    dt = datetime(serial_date, 'ConvertFrom', 'datenum');
+    [y, m, d] = ymd(dt);
+
+    % Shift months, then figure out which year/month we land on
+    total_months = m + m_off;
+    extra_years  = floor((total_months - 1) / 12); % we add an extrayear if the months offset pass to the next year
+    final_month  = mod(total_months - 1, 12) + 1; % mod returns the rest of the division
+    final_year   = y + y_off + extra_years; %Total year shift
+
+    % Clamp day if it exceeds the month (e.g. day 31 in a 30-day month)
+    max_day   = eomday(final_year, final_month); % We need to check the last day of the final month
+    final_day = min(d, max_day); % e.g. : The day will be 29th of february if d = 31
+
+    % Build date and add day offset (datetime handles month/year overflow)
+    result = datenum(datetime(final_year, final_month, final_day) + days(d_off));
+
 end
+
+
+function adj = roll_to_busday(serial_date, convention)
+% Rolls a date to the nearest business day.
+%   'following'          -> always forward
+%   'modified_following' -> forward, unless that changes the month, then backward
+
+    if strcmp(convention, 'modified_following')
+        adj = next_busday(serial_date);
+
+        % If we jumped to a different month, go backward instead
+        % We use the function same month
+        if ~same_month(serial_date, adj)
+            adj = prev_busday(serial_date);
+        end
+    % If the convention is 'following' instead:
+
+    else 
+        adj = next_busday(serial_date);
+    end
+
 end
-else
-% Default Following: just move forward to next business day
-while ~isbusday(adjusted_date)
-            adjusted_date = adjusted_date + 1;
+
+
+function bd = next_busday(serial_date)
+% Move forward until we hit a business day.
+    bd = serial_date;
+    while ~isbusday(bd)
+        bd = bd + 1;
+    end
 end
+
+
+function bd = prev_busday(serial_date)
+% Move backward until we hit a business day.
+    bd = serial_date;
+    while ~isbusday(bd)
+        bd = bd - 1;
+    end
 end
+
+function tf = same_month(date1, date2) %returns a logic answer true or false
+% Check if two serial dates fall in the same month and year.
+    dt1 = datetime(date1, 'ConvertFrom', 'datenum');
+    dt2 = datetime(date2, 'ConvertFrom', 'datenum');
+    tf  = (month(dt1) == month(dt2)) && (year(dt1) == year(dt2));
 end
