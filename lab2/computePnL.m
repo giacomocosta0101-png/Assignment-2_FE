@@ -19,8 +19,9 @@ function PnL = computePnL(N, R_trader, R_bank, R_fair, dates, discounts)
 reference_date = dates(1);
 day_count_swap = 6; % day count 30/360
 
-% We compute the 6-year maturity date from the reference date using business-day adjustment
-maturity6y = business_date_offset(reference_date, year_offset = 6);
+% Compute the 6-year maturity date by adding 6 calendar years to the reference date.
+% This is needed because the exit condition in couponSchedule compares unadjusted dates.
+ maturity6y = reference_date + calyears(6);
 
 % We generate the vector of dates (between reference_date and maturity6y) 
 % in which we receive a coupon payment:
