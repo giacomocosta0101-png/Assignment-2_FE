@@ -20,8 +20,10 @@ reference_date = dates(1);
 day_count_swap = 6; % day count 30/360
 
 % Compute the 6-year maturity date by adding 6 calendar years to the reference date.
-% This is needed because the exit condition in couponSchedule compares unadjusted dates.
- maturity6y = reference_date + calyears(6);
+% This is needed because the exit condition in couponSchedule compares
+% unadjusted dates. We use addtodate since reference_date is a datenum
+ maturity6y = addtodate(reference_date,6,'year');
+ 
 
 % We generate the vector of dates (between reference_date and maturity6y) 
 % in which we receive a coupon payment:
