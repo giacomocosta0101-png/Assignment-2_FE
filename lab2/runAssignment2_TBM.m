@@ -38,7 +38,7 @@ priceBond = N;
 
 %% Exercise 3
 
-reference_date = dates(1);          % 15-Feb 2008
+reference_date = dates(1);          % 19-Feb 2008
 issue_d = datetime(2007,3,31);      % date in which we issued the bond
 maturityBond = datetime(2012,3,31); % maturity of the bond
 coupon = 0.046;                     % annual coupon of the bond
@@ -102,7 +102,7 @@ analyzeDefaultIntensities(tau, theta, T)
     theta, T, alpha, 'mle_survival.pdf');
 %% Exercise 6
 
-reference_date = datesSet.settlement; % Valuation date used for discounting (15-Feb-2008)
+reference_date = datesSet.settlement; % Valuation date used for discounting (19-Feb-2008)
 startCF = datetime(2008,3,19); % first payment date
 AAGR = 0.05;   % Annual Average Growth Rate applied once per year in March
 CF0a = 1500;   % Initial monthly cash flows (Case a)
