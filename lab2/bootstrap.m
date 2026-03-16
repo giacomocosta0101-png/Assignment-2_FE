@@ -129,7 +129,7 @@ for swap_expiry = dates_swaps'
 
     for year = 1:51
         d_pay = datenum(datetime(reference_date, 'ConvertFrom', 'datenum') + calyears(year));
-        d_pay = busdate(d_pay, "follow", holidays);
+        d_pay = business_date_offset(d_pay, convention = 'modified_following');
         coupon_dates = [coupon_dates; d_pay];
 
         if d_pay >= swap_expiry

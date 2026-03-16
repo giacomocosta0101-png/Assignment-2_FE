@@ -94,7 +94,9 @@ alpha = 0.05;     % significance level for confidence intervals
 % We simulate the default time 
 tau = simulate_default_time(lambda1, lambda2,theta, M);
 
-analyzeDefaultIntensities(tau, theta, T)
+% We use the OLS implemented in MATLAB
+[lambda1_OLS, lambda2_OLS, CI_lambda1_OLS, CI_lambda2_OLS] = analyzeDefaultIntensities(tau, ...
+    theta, T, alpha, 'OLS_regression.pdf');
 
 % We fit the sulvival probability, we provide an estimator and 
 % a confidence Interval for 𝜆1 and 𝜆2  
