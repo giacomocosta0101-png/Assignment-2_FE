@@ -31,7 +31,7 @@ CF = zeros(size(datesCF));
 
 for i = 1:length(datesCF)
     % We select the i-th payment date
-    t = datesCF(i);
+    t = business_date_offset(datesCF(i),convention = 'modified_following');
 
     % For the selected date, we extract the corresponding year (y) and month (m)
     [y, m, ~] = datevec(t);

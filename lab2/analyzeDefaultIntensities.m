@@ -1,127 +1,141 @@
-function analyzeDefaultIntensities(tau, theta, Tmax)
-% Piecewise-constant default intensity estimation.
+function [lambda1_OLS, lambda2_OLS, CI_lambda1, CI_lambda2] = analyzeDefaultIntensities(tau, theta, T, alpha, filename)
+% Compute OLS estimators, confidence interval for lambda1, lambda2 and plots 
+% the log-linear survival fit.
 %
-%   analyzeDefaultIntensities(tau, theta, Tmax)
-%
-%   Fits a piecewise-constant hazard-rate model to simulated default times
-%   by performing two separate log-linear regressions on the empirical
-%   survival function:
-%       - Region 1: [0, theta]   -->  intensity lambda_1
-%       - Region 2: (theta, Tmax] -->  intensity lambda_2
-%
-%   Under a piecewise-constant intensity the survival probability is:
-%       ln S(t) = -lambda_1 * t                              for t <= theta
-%       ln S(t) = -lambda_1 * theta - lambda_2 * (t - theta) for t >  theta
-%
-%   The function also plots the empirical log-survival curve, the fitted
-%   piecewise-linear model, and the 95 % confidence bands.
-%
-%   INPUTS:
-%       tau   – Mx1 vector of simulated default/survival times;
-%               censored observations (survived to maturity) have tau = T
-%       theta – scalar, breakpoint separating the two intensity regimes
-%       Tmax  – scalar, maximum horizon for the analysis grid
-%
-%   OUTPUTS:
-%       (none – results are printed to console and plotted)
+% INPUTS:
+% tau       : Vector with simulated default times        
+% theta     : Time (in years) when the risk intensity changes           
+% T         : Maximum time horizon 
+% alpha     : Significance level for confidence intervals 
+% filename  : Output PDF path (e.g. 'OLS_regression.pdf')
+%            
+% OUTPUT:
+% lambda1_OLS   : estimator for lambda1
+% lambda2_OLS   : estimator for lambda2
+% CI_lambda1    : confidence interval for lambda1
+% CI_lambda2    : confidence interval for lambda2
 
-%% EMPIRICAL SURVIVAL FUNCTION
+% -------------------------------------------------------------------------
+% Empirical Survival Function
+% -------------------------------------------------------------------------
 
 % Build a fine time grid and compute the empirical survival probability
-% S(t) = P(tau >= t) estimated as the fraction of paths still alive at t
-
-tgrid = linspace(0, Tmax, 500)';
+tgrid = linspace(0, T, 500)';
 S_emp = zeros(size(tgrid));
 
 for i = 1:length(tgrid)
-
     S_emp(i) = mean(tau >= tgrid(i));
-
 end
 
-% Discard grid points where S_emp = 0 (log is undefined)
-
-mask      = S_emp > 0;
+% Discard grid points where empirical survival is 0
+mask = S_emp > 0;
 tgrid_fit = tgrid(mask);
-Y_log     = log(S_emp(mask));
+Y_log = log(S_emp(mask));
 
-%% REGION 1 (0 to theta): ESTIMATE LAMBDA_1
+% -------------------------------------------------------------------------
+% OLS for Lambda 1 (First period: t <= theta) 
+% -------------------------------------------------------------------------
 
-% In this region ln S(t) = -lambda_1 * t, so we fit a zero-intercept
-% linear model and recover lambda_1 as the negated slope
+% idx1 indicates times in the first period
+idx1 = (tgrid_fit <= theta);
+X1 = tgrid_fit(idx1);
+Y1 = Y_log(idx1);
 
-idx1 = tgrid_fit <= theta;
-X1   = tgrid_fit(idx1);
-Y1   = Y_log(idx1);
+% Fit a zero-intercept linear model
+mdl1 = fitlm(X1, Y1, 'Intercept', false);
 
-mdl1        = fitlm(X1, Y1, 'Intercept', false);
-lambda1_hat = -mdl1.Coefficients.Estimate;
+% Recover lambda1 as the negated slope
+lambda1_OLS = -mdl1.Coefficients.Estimate;
 
-% 95 % confidence interval (sign-flip reverses the order)
+% Confidence interval for lambda1
+ci1 = mdl1.coefCI(alpha);
+CI_lambda1 = sort(-ci1);
 
-ci1         = mdl1.coefCI;
-CI_lambda1  = sort(-ci1);
+% -------------------------------------------------------------------------
+% OLS for Lambda 2 (Second period: t > theta) 
+% -------------------------------------------------------------------------
 
-%% REGION 2 (theta to Tmax): ESTIMATE LAMBDA_2
+% idx2 indicates times in the second period
+idx2 = (tgrid_fit > theta);
 
+% Shift the data to fit ln S_shifted = -lambda_2 * x
+X2 = tgrid_fit(idx2) - theta;
+Y2 = Y_log(idx2) + lambda1_OLS * theta;
 
-% Shift the data so that the model becomes ln S_shifted = -lambda_2 * x
-%   x = t - theta
-%   ln S_shifted = ln S(t) + lambda_1 * theta
+% Fit a zero-intercept linear model
+mdl2 = fitlm(X2, Y2, 'Intercept', false);
 
-idx2 = tgrid_fit > theta;
-X2   = tgrid_fit(idx2) - theta;
-Y2   = Y_log(idx2) + lambda1_hat * theta;
+% Recover lambda2 as the negated slope
+lambda2_OLS = -mdl2.Coefficients.Estimate;
 
-mdl2        = fitlm(X2, Y2, 'Intercept', false);
-lambda2_hat = -mdl2.Coefficients.Estimate;
+% Confidence interval for lambda2
+ci2 = mdl2.coefCI(alpha);
+CI_lambda2 = sort(-ci2);
 
-ci2         = mdl2.coefCI;
-CI_lambda2  = sort(-ci2);
+% -------------------------------------------------------------------------
+% Build the theoretical fitted log-survival curve
+% -------------------------------------------------------------------------
 
-%% PLOT
+% Initialize the fitted log-survival vector
+Y_fit = zeros(size(tgrid_fit));
 
-% Reconstruct the fitted piecewise-linear log-survival curve
+% First period 
+Y_fit(idx1) = -lambda1_OLS * tgrid_fit(idx1);
 
-Y_fit       = zeros(size(tgrid_fit));
-Y_fit(idx1) = -lambda1_hat * tgrid_fit(idx1);
-Y_fit(idx2) = -lambda1_hat * theta - lambda2_hat * (tgrid_fit(idx2) - theta);
+% Second period 
+Y_fit(idx2) = -lambda1_OLS * theta - lambda2_OLS * (tgrid_fit(idx2) - theta);
 
-figure;
-plot(tgrid_fit, Y_log, 'b-', 'LineWidth', 1.5); hold on;
-plot(tgrid_fit, Y_fit, 'r--', 'LineWidth', 2);
-xline(theta, 'k--', '\theta=5', 'LabelVerticalAlignment', 'bottom');
+% -------------------------------------------------------------------------
+% Compute Confidence Interval Bounds for the Plot 
+% -------------------------------------------------------------------------
 
-title('Log-Linear Fit of the Survival Probability');
-xlabel('Time \tau (Years)');
-ylabel('ln( S(\tau) )');
-legend('Empirical Data', 'Fitted Curve', 'Location', 'SouthWest');
+% Initialize the bounds vectors
+Y_CI_lower = zeros(size(tgrid_fit));
+Y_CI_upper = zeros(size(tgrid_fit));
+
+% First period bounds
+Y_CI_lower(idx1) = -CI_lambda1(2) * tgrid_fit(idx1);
+Y_CI_upper(idx1) = -CI_lambda1(1) * tgrid_fit(idx1);
+
+% Second period bounds
+Y_CI_lower(idx2) = -CI_lambda1(2) * theta - CI_lambda2(2) * (tgrid_fit(idx2) - theta);
+Y_CI_upper(idx2) = -CI_lambda1(1) * theta - CI_lambda2(1) * (tgrid_fit(idx2) - theta);
+
+% -------------------------------------------------------------------------
+% Generate Plot
+% -------------------------------------------------------------------------
+
+fig = figure('Visible', 'off');
+
+% Plot empirical log-survival curve
+plot(tgrid_fit, Y_log, 'b-', 'LineWidth', 1.5);
+hold on;
+
+% Plot fitted log-survival curve 
+plot(tgrid_fit, Y_fit, 'r-', 'LineWidth', 1.5);
+
+% Add Confidence Bands to the Plot
+plot(tgrid_fit, Y_CI_lower, 'r--', 'LineWidth', 0.5);
+plot(tgrid_fit, Y_CI_upper, 'r--', 'LineWidth', 0.5);
+
+% Vertical line at theta 
+xline(theta, 'k--', 'Theta', 'LabelVerticalAlignment', 'bottom');
+
+% Add title and axis labels
+title('Log-Linear Survival Fit (OLS)', 'FontSize', 12);
+xlabel('Time to Default \tau (Years)', 'FontSize', 11);
+ylabel('ln(P(0,\tau))', 'FontSize', 11);
+
+legend('Empirical Data', 'Fitted Model (OLS)', '95% CI Bounds', 'Location', 'best');
+
+% Limit x-axis to [0, T]
+xlim([0, T]);
+
 grid on;
 
-%% CONSOLE OUTPUT
-
-
-fprintf('\n=== FIT RESULTS ===\n');
-fprintf('lambda1_hat = %.6f (bps: %.2f)\n', lambda1_hat, lambda1_hat * 1e4);
-fprintf('CI lambda1  = [%.6f, %.6f]\n', CI_lambda1(1), CI_lambda1(2));
-fprintf('lambda2_hat = %.6f (bps: %.2f)\n', lambda2_hat, lambda2_hat * 1e4);
-fprintf('CI lambda2  = [%.6f, %.6f]\n', CI_lambda2(1), CI_lambda2(2));
-
-%% 95 % CONFIDENCE BANDS
-
-% Upper and lower bounds obtained by plugging the CI endpoints of each
-% lambda into the piecewise-linear formula
-Y_up       = zeros(size(tgrid_fit));
-Y_lo       = zeros(size(tgrid_fit));
-
-Y_up(idx1) = -CI_lambda1(1) * tgrid_fit(idx1);
-Y_lo(idx1) = -CI_lambda1(2) * tgrid_fit(idx1);
-
-Y_up(idx2) = -CI_lambda1(1) * theta - CI_lambda2(1) * (tgrid_fit(idx2) - theta);
-Y_lo(idx2) = -CI_lambda1(2) * theta - CI_lambda2(2) * (tgrid_fit(idx2) - theta);
-
-plot(tgrid_fit, Y_up, 'g--', 'LineWidth', 1);
-plot(tgrid_fit, Y_lo, 'g--', 'LineWidth', 1);
-legend('Empirical Data', 'Fitted Curve', 'CI 95%', 'Location', 'SouthWest');
+% Save the figure as vector PDF and close
+exportgraphics(fig, filename, 'ContentType', 'vector');
+close(fig);
+fprintf('Plot saved to: %s\n', filename);
 
 end
