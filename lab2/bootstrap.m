@@ -35,7 +35,7 @@ day_count_depos = 2;
 
 % Use only deposit maturities that fall before the first futures settlement
 mask = datesSet.futures(1,1);
-depo_dates = datesSet.depos(datesSet.depos < mask);
+depo_dates = datesSet.depos(datesSet.depos <= mask);
 
 % Mid-market deposit rates (average of BID and ASK)
 depo_rates = mean(ratesSet.depos, 2);
