@@ -14,40 +14,40 @@ function [dates, rates] = readExcelData( filename, formatData)
 %% Dates from Excel
 
 %Settlement date
-settlement = readcell(filename, 'Sheet', 1, 'Range', 'E8');
+[~, settlement] = xlsread(filename, 1, 'E8');
 %Date conversion
-dates.settlement = datenum(settlement{1});
+dates.settlement = datenum(settlement, formatData);
 
 %Dates relative to depos
-date_depositi = readcell(filename, 'Sheet', 1, 'Range', 'D11:D18');
-dates.depos = datenum(cell2mat(date_depositi));
+[~, date_depositi] = xlsread(filename, 1, 'D11:D18');
+dates.depos = datenum(date_depositi, formatData);
 
 %Dates relative to futures: calc start & end
-date_futures_read = readcell(filename, 'Sheet', 1, 'Range', 'Q12:R20');
+[~, date_futures_read] = xlsread(filename, 1, 'Q12:R20');
 numberFutures = size(date_futures_read,1);
 
-dates.futures = ones(numberFutures,2);
-dates.futures(:,1) = datenum(cell2mat(date_futures_read(:,1)));
-dates.futures(:,2) = datenum(cell2mat(date_futures_read(:,2)));
+dates.futures=ones(numberFutures,2);
+dates.futures(:,1) = datenum(date_futures_read(:,1), formatData);
+dates.futures(:,2) = datenum(date_futures_read(:,2), formatData);
 
 %Date relative to swaps: expiry dates
-date_swaps = readcell(filename, 'Sheet', 1, 'Range', 'D39:D88');
-dates.swaps = datenum(cell2mat(date_swaps));
+[~, date_swaps] = xlsread(filename, 1, 'D39:D88');
+dates.swaps = datenum(date_swaps, formatData);
 
 %% Rates from Excel (Bids & Asks)
 
 %Depos
-tassi_depositi = readmatrix(filename, 'Sheet', 1, 'Range', 'E11:F18');
+tassi_depositi = xlsread(filename, 1, 'E11:F18');
 rates.depos = tassi_depositi / 100;
 
 %Futures
-tassi_futures = readmatrix(filename, 'Sheet', 1, 'Range', 'E28:F36');
+tassi_futures = xlsread(filename, 1, 'E28:F36');
 %Rates from futures
 tassi_futures = 100 - tassi_futures;
 rates.futures = tassi_futures / 100;
 
 %Swaps
-tassi_swaps = readmatrix(filename, 'Sheet', 1, 'Range', 'E39:F88');
+tassi_swaps = xlsread(filename, 1, 'E39:F88');
 rates.swaps = tassi_swaps / 100;
 
 end % readExcelData
